@@ -148,8 +148,8 @@ BLEND_R2_SATURATION = 0.40   # R² at which practice gets full weight
 # ---------------------------------------------------------------------------
 
 MIN_STINT_LAPS   = 5
-SOFT_MAX_STINT   = 20
-MEDIUM_MAX_STINT = 35
+SOFT_MAX_STINT   = 25
+MEDIUM_MAX_STINT = 38
 HARD_MAX_STINT   = None        # no upper limit — capped by race distance
 
 STINT_DISCRETIZATION = 2       # generate stint lengths in steps of 2 laps
