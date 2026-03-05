@@ -171,6 +171,85 @@ def score_strategy(
     return total_time
 
 
+def compute_lap_timeline(
+    strategy: Strategy,
+    deg_curves: Dict[str, DegradationCurve],
+    base_pace: float,
+    pit_loss: float,
+    total_laps: int,
+) -> List[Tuple[int, float]]:
+    """Return per-lap predicted times [(lap_num, lap_time_s), ...] for a strategy."""
+    from config import FUEL_BURN_RATE, WARMUP_PROFILE
+
+    result: List[Tuple[int, float]] = []
+    race_lap = 0
+
+    for stint_idx, stint in enumerate(strategy.stints):
+        curve = deg_curves.get(stint.compound)
+
+        for lap_in_stint in range(stint.laps):
+            race_lap += 1
+            tire_age = lap_in_stint
+
+            deg_penalty = curve.predict(tire_age) if curve else 0.0
+            fuel_benefit = FUEL_BURN_RATE * race_lap
+            lap_time = base_pace + deg_penalty - fuel_benefit
+
+            if stint_idx > 0:
+                warmup = WARMUP_PROFILE.get(stint.compound, [1.2])
+                if lap_in_stint < len(warmup):
+                    lap_time += warmup[lap_in_stint]
+
+            result.append((race_lap, float(lap_time)))
+
+    return result
+
+
+def strategy_delta_breakdown(
+    strat_a: Strategy,
+    strat_b: Strategy,
+    deg_curves: Dict[str, DegradationCurve],
+    base_pace: float,
+    pit_loss: float,
+    total_laps: int,
+) -> Dict[str, float]:
+    """Break down the time difference between two strategies into components.
+
+    Returns dict with keys: pit_delta, warmup_delta, degradation_delta, total_delta.
+    Positive values mean strat_b is slower than strat_a in that component.
+    """
+    from config import FUEL_BURN_RATE, WARMUP_PROFILE
+
+    def _component_times(strat: Strategy) -> Tuple[float, float, float]:
+        pit_cost = pit_loss * strat.num_stops
+        deg_total = 0.0
+        warmup_total = 0.0
+        race_lap = 0
+
+        for stint_idx, stint in enumerate(strat.stints):
+            curve = deg_curves.get(stint.compound)
+            for lap_in_stint in range(stint.laps):
+                race_lap += 1
+                deg_penalty = curve.predict(lap_in_stint) if curve else 0.0
+                deg_total += deg_penalty
+                if stint_idx > 0:
+                    warmup = WARMUP_PROFILE.get(stint.compound, [1.2])
+                    if lap_in_stint < len(warmup):
+                        warmup_total += warmup[lap_in_stint]
+
+        return pit_cost, deg_total, warmup_total
+
+    pit_a, deg_a, warm_a = _component_times(strat_a)
+    pit_b, deg_b, warm_b = _component_times(strat_b)
+
+    return {
+        "pit_delta": pit_b - pit_a,
+        "warmup_delta": warm_b - warm_a,
+        "degradation_delta": deg_b - deg_a,
+        "total_delta": (pit_b - pit_a) + (warm_b - warm_a) + (deg_b - deg_a),
+    }
+
+
 def compute_base_pace(
     quali_session,
     drivers: Optional[List[str]] = None,

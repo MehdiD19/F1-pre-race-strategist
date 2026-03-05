@@ -684,6 +684,9 @@
       <button class="tab-btn" onclick="showTab('strat')">
         <span class="tab-icon">🏆</span> <span class="tab-label">Strategies</span>
       </button>
+      <button class="tab-btn" onclick="showTab('charts')">
+        <span class="tab-icon">📉</span> <span class="tab-label">Charts</span>
+      </button>
       <button class="tab-btn" onclick="showTab('sens')">
         <span class="tab-icon">🎯</span> <span class="tab-label">Sensitivity</span>
       </button>
@@ -702,6 +705,25 @@
     <div class="card tab-body" id="tab-strat" style="margin-top:8px">
       <div class="section-title">Strategy Rankings <span id="stratCount" style="font-family:Inter;font-weight:400;font-size:12px;text-transform:none;letter-spacing:0;color:var(--text-2);"></span></div>
       <div class="table-wrap" id="stratTable"></div>
+    </div>
+
+    <!-- Charts tab -->
+    <div class="card tab-body" id="tab-charts" style="margin-top:8px">
+      <div class="section-title">Race Simulation Timeline</div>
+      <div class="info-note">Lap-by-lap predicted time for the top 3 strategies (reference driver pace).</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="chartTimeline"></canvas></div>
+
+      <div class="section-title" style="margin-top:28px">Pit Window</div>
+      <div class="info-note">Optimal first-stop lap range for strategies within +5 s of optimal.</div>
+      <div class="chart-wrap" style="height:140px"><canvas id="chartPitWindow"></canvas></div>
+
+      <div class="section-title" style="margin-top:28px">Strategy Delta Waterfall</div>
+      <div class="info-note">What drives the time gap between rank 1 and rank 2?</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="chartWaterfall"></canvas></div>
+
+      <div class="section-title" style="margin-top:28px">Driver Pace Gap</div>
+      <div class="info-note">Base pace vs reference driver (s/lap).</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="chartPaceGap"></canvas></div>
     </div>
 
     <!-- Sensitivity tab -->
@@ -790,7 +812,7 @@ function showTab(name) {
   document.querySelectorAll('.tab-body').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  const idx = {deg:0, strat:1, sens:2, val:3}[name];
+  const idx = {deg:0, strat:1, charts:2, sens:3, val:4}[name];
   document.querySelectorAll('.tab-btn')[idx].classList.add('active');
 }
 
@@ -920,6 +942,13 @@ function stintSeqHtml(desc) {
   }).join('<span class="stint-arrow"> › </span>');
 }
 
+const STINT_PALETTE = ['#e10600','#0090d0','#00c060','#f5c518','#a855f7','#ec4899','#14b8a6','#f97316'];
+function stintColor(stintId) {
+  let h = 0;
+  for (let i = 0; i < (stintId || '').length; i++) h = ((h << 5) - h) + stintId.charCodeAt(i) | 0;
+  return STINT_PALETTE[Math.abs(h) % STINT_PALETTE.length];
+}
+
 function fmtRaceTime(s) {
   const h  = Math.floor(s / 3600);
   const m  = Math.floor((s % 3600) / 60);
@@ -949,6 +978,7 @@ function renderResults(data) {
 
   renderDegTab(data.degradation || {});
   renderStratTab(data.strategies || [], data.total_strategies || 0);
+  renderChartsTab(data);
   renderSensTab(data.sensitivity || []);
   renderValTab(data.validation || []);
   document.getElementById('narrativeText').textContent = data.narrative || 'No insights available.';
@@ -1033,15 +1063,26 @@ function renderDegTab(degData) {
             tension: 0.3,
             order: 3,
           },
-          {
-            type: 'scatter',
-            label: 'Practice laps',
-            data: d.raw_x.map((x, i) => ({ x, y: d.raw_y[i] })),
-            backgroundColor: cmpColorAlpha(cmp, 0.35),
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            order: 1,
-          },
+          ...(d.raw_stint && d.raw_stint.length === d.raw_x.length
+            ? [...new Set(d.raw_stint)].map((stintId) => ({
+                type: 'scatter',
+                label: stintId,
+                data: d.raw_x.map((x, i) => d.raw_stint[i] === stintId ? { x, y: d.raw_y[i] } : null).filter(Boolean),
+                backgroundColor: stintColor(stintId),
+                borderColor: stintColor(stintId),
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                order: 1,
+              }))
+            : [{
+                type: 'scatter',
+                label: 'Practice laps',
+                data: d.raw_x.map((x, i) => ({ x, y: d.raw_y[i] })),
+                backgroundColor: cmpColorAlpha(cmp, 0.35),
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                order: 1,
+              }]),
         ]
       },
       options: {
@@ -1110,6 +1151,122 @@ function renderStratTab(strategies, totalCount) {
   });
   html += '</tbody></table>';
   document.getElementById('stratTable').innerHTML = html;
+}
+
+// ── Charts tab (Timeline, Pit Window, Waterfall, Pace Gap) ─────────────────
+function renderChartsTab(data) {
+  const destroy = (k) => { if (charts[k]) { charts[k].destroy(); delete charts[k]; } };
+  ['timeline','pitWindow','waterfall','paceGap'].forEach(destroy);
+
+  const chartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#9999aa', font: { size: 11 } } } },
+    scales: {
+      x: { grid: { color: '#1e1e28' }, ticks: { color: '#55556a', maxTicksLimit: 15 } },
+      y: { grid: { color: '#1e1e28' }, ticks: { color: '#55556a' } },
+    },
+  };
+
+  // 1. Race Simulation Timeline
+  const tl = data.lap_timeline || {};
+  if (tl.strategies && tl.strategies.length > 0) {
+    const ctx = document.getElementById('chartTimeline').getContext('2d');
+    const colors = ['#e10600','#0090d0','#00c060'];
+    const datasets = tl.strategies.map((s, i) => ({
+      type: 'line', label: `#${s.rank} ${s.description}`,
+      data: s.lap_times, borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length] + '20',
+      borderWidth: 2, fill: false, pointRadius: 0, tension: 0.2,
+    }));
+    charts.timeline = new Chart(ctx, {
+      data: { labels: tl.laps || [], datasets },
+      options: { ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, title: { display: true, text: 'Lap time (s)', color: '#55556a' } } } },
+    });
+  }
+
+  // 2. Pit Window (horizontal bar: pit between lap min and max)
+  const pw = data.pit_window || [];
+  if (pw.length > 0) {
+    const ctx = document.getElementById('chartPitWindow').getContext('2d');
+    charts.pitWindow = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: pw.map(p => p.compound),
+        datasets: [{
+          label: 'Pit window (laps)',
+          data: pw.map(p => [p.min_laps, p.max_laps]),
+          backgroundColor: pw.map(p => cmpColorAlpha(p.compound, 0.5)),
+          borderColor: pw.map(p => cmpColor(p.compound)),
+          borderWidth: 1,
+          barThickness: 24,
+        }],
+      },
+      options: {
+        ...chartOpts,
+        indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `Lap ${c.raw[0]}–${c.raw[1]}` } } },
+        scales: { x: { ...chartOpts.scales.x, min: 0, title: { display: true, text: 'First stint laps', color: '#55556a' } } },
+      },
+    });
+  }
+
+  // 3. Strategy Delta Waterfall
+  const sd = data.strategy_delta;
+  if (sd && (data.strategies || []).length >= 2) {
+    const ctx = document.getElementById('chartWaterfall').getContext('2d');
+    const comps = [
+      { label: 'Pit stops', val: sd.pit_delta, color: '#e10600' },
+      { label: 'Warmup', val: sd.warmup_delta, color: '#f5c518' },
+      { label: 'Degradation', val: sd.degradation_delta, color: '#0090d0' },
+    ].filter(c => Math.abs(c.val) > 0.01);
+    charts.waterfall = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: comps.map(c => c.label),
+        datasets: [{
+          label: 'Seconds (rank 2 slower)',
+          data: comps.map(c => c.val),
+          backgroundColor: comps.map(c => c.val > 0 ? c.color + '99' : '#00c06099'),
+          borderColor: comps.map(c => c.val > 0 ? c.color : '#00c060'),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        ...chartOpts,
+        plugins: {
+          tooltip: { callbacks: { label: ctx => `${ctx.parsed.y > 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)} s` } },
+        },
+        scales: { y: { ...chartOpts.scales.y, title: { display: true, text: 'Δ seconds', color: '#55556a' } } },
+      },
+    });
+  }
+
+  // 4. Driver Pace Gap
+  const dp = data.driver_paces || {};
+  const ref = data.reference_driver;
+  const refPace = data.reference_pace || 0;
+  if (ref && Object.keys(dp).length > 0) {
+    const drivers = Object.entries(dp).sort((a, b) => a[1] - b[1]);
+    const gaps = drivers.map(([d, p]) => p - refPace);
+    const ctx = document.getElementById('chartPaceGap').getContext('2d');
+    charts.paceGap = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: drivers.map(([d]) => d),
+        datasets: [{
+          label: `Δ vs ${ref} (s/lap)`,
+          data: gaps,
+          backgroundColor: gaps.map(g => g === 0 ? '#e1060080' : (g > 0 ? '#ff6b6b60' : '#00c06060')),
+          borderColor: gaps.map(g => g === 0 ? '#e10600' : (g > 0 ? '#ff6b6b' : '#00c060')),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        ...chartOpts,
+        indexAxis: 'y',
+        scales: { x: { ...chartOpts.scales.x, title: { display: true, text: `Seconds/lap vs ${ref}`, color: '#55556a' } } },
+      },
+    });
+  }
 }
 
 // ── Sensitivity table ─────────────────────────────────────────────────────

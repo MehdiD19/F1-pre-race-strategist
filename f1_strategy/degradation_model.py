@@ -166,6 +166,8 @@ def _extract_long_runs(
             result[compound].append(pd.DataFrame({
                 "stint_lap":     stint_laps,
                 "delta_seconds": corrected_delta,
+                "driver":        driver,
+                "stint_id":      f"{driver}_{stint_num}",
             }))
 
     merged: Dict[str, pd.DataFrame] = {}

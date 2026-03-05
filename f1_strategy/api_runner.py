@@ -21,8 +21,10 @@ from degradation_model import DegradationCurve, build_degradation_curves
 from historical_model import build_historical_prior
 from strategy_engine import (
     compute_base_pace,
+    compute_lap_timeline,
     generate_strategies,
     rank_strategies,
+    strategy_delta_breakdown,
     sensitivity_analysis,
 )
 from validation import validate_race
@@ -44,9 +46,13 @@ def _serialize_degradation(curves: Dict[str, DegradationCurve]) -> Dict[str, Any
 
         raw_x: List[float] = []
         raw_y: List[float] = []
+        raw_driver: List[str] = []
+        raw_stint: List[str] = []
         if curve.raw_data is not None and not curve.raw_data.empty:
             raw_x = [float(v) for v in curve.raw_data["stint_lap"].tolist()]
             raw_y = [round(float(v), 4) for v in curve.raw_data["delta_seconds"].tolist()]
+            raw_driver = curve.raw_data["driver"].tolist() if "driver" in curve.raw_data.columns else []
+            raw_stint = curve.raw_data["stint_id"].tolist() if "stint_id" in curve.raw_data.columns else []
 
         out[compound] = {
             "r_squared":    round(float(curve.r_squared), 3),
@@ -60,6 +66,8 @@ def _serialize_degradation(curves: Dict[str, DegradationCurve]) -> Dict[str, Any
             "curve_y_minus":[round(v, 4) for v in curve_y_minus],
             "raw_x": raw_x,
             "raw_y": raw_y,
+            "raw_driver": raw_driver,
+            "raw_stint": raw_stint,
         }
     return out
 
@@ -175,6 +183,61 @@ def run_analysis(
     # ── Serialize ──────────────────────────────────────────────────────────
     log("Building output…")
 
+    # Lap timeline for top 3 strategies (lap-by-lap predicted time)
+    top_n_timeline = 3
+    lap_timeline: Dict[str, Any] = {
+        "laps": list(range(1, profile.total_laps + 1)),
+        "strategies": [],
+    }
+    for i, s in enumerate(ranked[:top_n_timeline]):
+        timeline = compute_lap_timeline(
+            s, deg_curves, reference_pace, profile.pit_loss_seconds, profile.total_laps
+        )
+        lap_timeline["strategies"].append({
+            "rank": i + 1,
+            "description": s.description,
+            "lap_times": [round(t, 2) for _, t in timeline],
+        })
+
+    # Pit window: strategies within +5s of optimal, extract stint-1 lap ranges per compound
+    PIT_WINDOW_DELTA = 5.0
+    optimal_time = ranked[0].total_time if ranked else 0.0
+    near_optimal = [s for s in ranked if s.total_time <= optimal_time + PIT_WINDOW_DELTA]
+    pit_window_laps: Dict[str, List[int]] = {}
+    for s in near_optimal:
+        if not s.stints:
+            continue
+        st1 = s.stints[0]
+        c = st1.compound
+        if c not in pit_window_laps:
+            pit_window_laps[c] = []
+        pit_window_laps[c].append(st1.laps)
+    pit_window_ranges: List[Dict[str, Any]] = []
+    for compound, laps_list in pit_window_laps.items():
+        mn, mx = min(laps_list), max(laps_list)
+        pit_window_ranges.append({
+            "compound": compound,
+            "min_laps": mn,
+            "max_laps": mx,
+            "pit_between_lap": f"{mn}–{mx}" if mn != mx else str(mn),
+        })
+
+    # Strategy delta breakdown: rank 1 vs rank 2
+    strategy_delta: Optional[Dict[str, Any]] = None
+    if len(ranked) >= 2:
+        bd = strategy_delta_breakdown(
+            ranked[0], ranked[1], deg_curves,
+            reference_pace, profile.pit_loss_seconds, profile.total_laps,
+        )
+        strategy_delta = {
+            "rank1": ranked[0].description,
+            "rank2": ranked[1].description,
+            "total_delta": round(bd["total_delta"], 2),
+            "pit_delta": round(bd["pit_delta"], 2),
+            "warmup_delta": round(bd["warmup_delta"], 2),
+            "degradation_delta": round(bd["degradation_delta"], 2),
+        }
+
     result: Dict[str, Any] = {
         "year": year,
         "gp": gp,
@@ -198,6 +261,9 @@ def run_analysis(
             for driver, pace in sorted(base_paces.items(), key=lambda x: x[1])
         },
         "total_strategies": len(ranked),
+        "lap_timeline": lap_timeline,
+        "pit_window": pit_window_ranges,
+        "strategy_delta": strategy_delta,
         "degradation": _serialize_degradation(deg_curves),
         "strategies": [
             {
