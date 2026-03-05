@@ -26,6 +26,10 @@ from config import (
     STINT_DISCRETIZATION,
     WARMUP_PENALTY,
 )
+
+# FULL_FUEL_PENALTY is kept as import for callers that don't pass fuel_penalty
+# explicitly (e.g. notebooks / tests).  The api_runner passes the circuit-
+# calibrated value derived from get_fuel_penalty(gp_name).
 from degradation_model import DegradationCurve
 
 logger = logging.getLogger(__name__)
@@ -164,12 +168,29 @@ def score_strategy(
     return total_time
 
 
-def compute_base_pace(quali_session, drivers: Optional[List[str]] = None) -> Dict[str, float]:
+def compute_base_pace(
+    quali_session,
+    drivers: Optional[List[str]] = None,
+    fuel_penalty: Optional[float] = None,
+) -> Dict[str, float]:
     """Derive per-driver base race pace from qualifying times.
 
     Tries Q3 first, then Q2, then Q1 so that every finisher gets a pace.
-    base_pace = best qualifying time (any session) + FULL_FUEL_PENALTY
+
+    base_pace = best qualifying time + fuel_penalty
+
+    Parameters
+    ----------
+    quali_session : FastF1 session object for qualifying.
+    drivers : optional list of driver codes to restrict results.
+    fuel_penalty : quali→race pace gap in seconds.  If None, the global
+        FULL_FUEL_PENALTY from config is used.  Callers should pass the
+        circuit-calibrated value from ``config.get_fuel_penalty(gp_name)``
+        to avoid the systematic base-pace underestimate identified in the
+        2023 Hungarian GP investigation (4.0 s assumed vs 8.1 s observed).
     """
+    penalty = fuel_penalty if fuel_penalty is not None else FULL_FUEL_PENALTY
+
     laps = quali_session.laps
     try:
         q1, q2, q3 = laps.split_qualifying_sessions()
@@ -196,11 +217,15 @@ def compute_base_pace(quali_session, drivers: Optional[List[str]] = None) -> Dic
                 continue
             try:
                 best_time = best["LapTime"].total_seconds()
-                result[driver] = best_time + FULL_FUEL_PENALTY
+                result[driver] = best_time + penalty
                 break  # stop at highest qualifying session with a time
             except Exception:
                 continue
 
+    logger.info(
+        "Base paces computed for %d drivers (fuel penalty = %.2f s)",
+        len(result), penalty,
+    )
     return result
 
 

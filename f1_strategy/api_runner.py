@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from config import COMPOUNDS, SENSITIVITY_RANGE
+from config import COMPOUNDS, SENSITIVITY_RANGE, get_fuel_penalty
 from data_collection import build_circuit_profile
 from degradation_model import DegradationCurve, build_degradation_curves
 from strategy_engine import (
@@ -50,6 +50,7 @@ def _serialize_degradation(curves: Dict[str, DegradationCurve]) -> Dict[str, Any
         out[compound] = {
             "r_squared": round(float(curve.r_squared), 3),
             "sample_size": int(curve.sample_size),
+            "is_fallback": bool(curve.is_fallback),
             "curve_x": curve_x,
             "curve_y": [round(v, 4) for v in curve_y],
             "curve_y_plus": [round(v, 4) for v in curve_y_plus],
@@ -108,7 +109,13 @@ def run_analysis(
     log(f"  {len(strategies)} unique strategies to score")
 
     log("  Computing driver base paces from qualifying…")
-    base_paces = compute_base_pace(profile.quali_session, drivers=drivers)
+    fuel_penalty = get_fuel_penalty(gp)
+    log(f"  Circuit fuel penalty: {fuel_penalty:.1f} s (circuit type from '{gp}')")
+    base_paces = compute_base_pace(
+        profile.quali_session,
+        drivers=drivers,
+        fuel_penalty=fuel_penalty,
+    )
     if not base_paces:
         raise RuntimeError("Could not derive any base paces from qualifying data.")
 
@@ -143,6 +150,7 @@ def run_analysis(
             "race_temp": round(profile.race_track_temp, 1),
             "fp2_temp": round(profile.fp2_track_temp, 1),
             "temp_delta": round(profile.race_track_temp - profile.fp2_track_temp, 1),
+            "fuel_penalty": round(fuel_penalty, 1),
         },
         "reference_driver": reference_driver,
         "reference_pace": round(reference_pace, 3),
