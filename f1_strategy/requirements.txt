@@ -1,0 +1,8 @@
+fastf1
+numpy
+pandas
+scipy
+matplotlib
+tabulate
+fastapi>=0.100.0
+uvicorn[standard]

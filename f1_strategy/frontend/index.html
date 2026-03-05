@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>F1 Strategy Optimizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Variables ────────────────────────────────────────── */
+    :root {
+      --bg:        #09090e;
+      --surface:   #111116;
+      --surface-2: #18181f;
+      --surface-3: #202028;
+      --border:    #2c2c38;
+      --border-2:  #3a3a48;
+      --text:      #eaeaf0;
+      --text-2:    #9999aa;
+      --text-3:    #55556a;
+      --red:       #e10600;
+      --red-2:     #ff2a22;
+      --red-glow:  rgba(225,6,0,0.15);
+      --green:     #00c060;
+      --yellow:    #f5c518;
+      --blue:      #0090d0;
+      --soft:      #e10600;
+      --medium:    #f5c518;
+      --hard:      #b0b0b8;
+      --radius:    10px;
+      --radius-sm: 6px;
+    }
+
+    /* ── Reset ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+    }
+
+    /* ── Header ───────────────────────────────────────────── */
+    header {
+      position: relative;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+    }
+    header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--red), #ff6b00, var(--red));
+    }
+    .header-inner {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .logo-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .logo-f1 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      color: var(--red);
+      background: var(--red);
+      color: #fff;
+      padding: 1px 7px;
+      border-radius: 3px;
+      display: inline-block;
+      width: fit-content;
+    }
+    .logo-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--text);
+    }
+    .logo-sub {
+      font-size: 11px;
+      color: var(--text-2);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 28px 32px 60px;
+    }
+
+    /* ── Cards ────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .card + .card, .card + .summary-grid, .summary-grid + .tab-bar,
+    .tab-bar + .tab-body, .tab-body + .narrative-card { margin-top: 16px; }
+
+    /* ── Section headings ─────────────────────────────────── */
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Setup Card ───────────────────────────────────────── */
+    .setup-row {
+      display: flex;
+      gap: 14px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 140px;
+    }
+    label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+    select, input[type="text"] {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color .15s;
+      -webkit-appearance: none;
+    }
+    select { cursor: pointer; }
+    select:hover, select:focus,
+    input[type="text"]:hover, input[type="text"]:focus {
+      border-color: var(--border-2);
+    }
+    select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Buttons ──────────────────────────────────────────── */
+    .btn-analyze {
+      flex-shrink: 0;
+      background: var(--red);
+      color: #fff;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 28px;
+      cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      white-space: nowrap;
+    }
+    .btn-analyze:hover:not(:disabled) {
+      background: var(--red-2);
+      box-shadow: 0 0 20px var(--red-glow);
+    }
+    .btn-analyze:active:not(:disabled) { transform: scale(0.97); }
+    .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Advanced toggle ──────────────────────────────────── */
+    .adv-toggle {
+      margin-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+      cursor: pointer;
+      user-select: none;
+      transition: color .15s;
+    }
+    .adv-toggle:hover { color: var(--text); }
+    .adv-toggle svg { transition: transform .2s; }
+    .adv-toggle.open svg { transform: rotate(180deg); }
+    .adv-panel {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      display: none;
+    }
+    .adv-panel.open { display: block; }
+    .adv-row { display: flex; gap: 14px; flex-wrap: wrap; }
+    .adv-row .form-group { max-width: 200px; }
+
+    /* ── Progress ─────────────────────────────────────────── */
+    .progress-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .progress-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border-2);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-log {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      color: var(--text-2);
+      line-height: 1.8;
+    }
+    .progress-log .log-line { display: block; }
+    .progress-log .log-line.new { color: var(--text); }
+
+    /* ── Error banner ─────────────────────────────────────── */
+    .error-banner {
+      background: rgba(225,6,0,0.08);
+      border: 1px solid rgba(225,6,0,0.3);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      color: #ff6b6b;
+      font-size: 13px;
+      display: none;
+    }
+    .error-banner.visible { display: block; }
+
+    /* ── Summary grid ─────────────────────────────────────── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .metric-card.accent { border-color: var(--red); background: linear-gradient(135deg, var(--surface) 60%, rgba(225,6,0,0.06)); }
+    .metric-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .metric-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .metric-value.sm { font-size: 18px; line-height: 1.3; }
+    .metric-sub {
+      font-size: 11px;
+      color: var(--text-2);
+    }
+
+    /* ── Tabs ─────────────────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 2px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px;
+    }
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-radius: 7px;
+      color: var(--text-2);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 10px 8px;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .tab-btn:hover { background: var(--surface-2); color: var(--text); }
+    .tab-btn.active {
+      background: var(--surface-3);
+      color: var(--text);
+      box-shadow: inset 0 0 0 1px var(--border);
+    }
+    .tab-btn.active .tab-icon { color: var(--red); }
+
+    /* ── Tab body ─────────────────────────────────────────── */
+    .tab-body { display: none; }
+    .tab-body.active { display: block; }
+
+    /* ── Degradation charts ───────────────────────────────── */
+    .deg-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .deg-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .deg-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .compound-badge {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .compound-badge.soft   { background: rgba(225,6,0,0.15);   color: #ff4444; border: 1px solid rgba(225,6,0,0.3); }
+    .compound-badge.medium { background: rgba(245,197,24,0.12); color: #f5c518; border: 1px solid rgba(245,197,24,0.3); }
+    .compound-badge.hard   { background: rgba(176,176,184,0.1); color: #b0b0b8; border: 1px solid rgba(176,176,184,0.25); }
+    .deg-stats {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--text-2);
+    }
+    .deg-stats span { white-space: nowrap; }
+    .deg-stats b { color: var(--text); }
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--text-2);
+    }
+    .chart-legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-line {
+      width: 18px; height: 2px;
+      border-radius: 1px;
+    }
+    .legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+
+    /* ── Tables ───────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-2);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-2); }
+    .row-optimal td { color: var(--text); }
+    .row-optimal td:first-child { color: var(--red); font-weight: 600; }
+
+    /* ── Stint pills ──────────────────────────────────────── */
+    .stint-seq {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .stint-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .stint-pill.soft   { background: rgba(225,6,0,0.15);   color: #ff5555; border: 1px solid rgba(225,6,0,0.3); }
+    .stint-pill.medium { background: rgba(245,197,24,0.12); color: #f5c518; border: 1px solid rgba(245,197,24,0.3); }
+    .stint-pill.hard   { background: rgba(176,176,184,0.1); color: #b0b0b8; border: 1px solid rgba(176,176,184,0.25); }
+    .stint-arrow { color: var(--text-3); font-size: 11px; }
+
+    /* ── Delta bar ────────────────────────────────────────── */
+    .delta-cell { min-width: 130px; }
+    .delta-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .delta-bar-bg {
+      flex: 1;
+      height: 5px;
+      background: var(--surface-3);
+      border-radius: 3px;
+      overflow: hidden;
+      max-width: 90px;
+    }
+    .delta-bar-fill {
+      height: 100%;
+      background: var(--red);
+      border-radius: 3px;
+      transition: width .4s;
+    }
+    .delta-text {
+      font-size: 12px;
+      color: var(--text-2);
+      white-space: nowrap;
+    }
+    .optimal-badge {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      background: rgba(225,6,0,0.15);
+      color: var(--red);
+      border: 1px solid rgba(225,6,0,0.3);
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    /* ── Rank badge ───────────────────────────────────────── */
+    .rank-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-3);
+    }
+    .rank-num.top1 { color: var(--red); }
+
+    /* ── Error / flip badges ──────────────────────────────── */
+    .badge-yes { color: #ff5555; font-weight: 600; }
+    .badge-no  { color: var(--green); font-weight: 500; }
+    .error-ok   { color: var(--green); }
+    .error-warn { color: var(--yellow); }
+    .error-high { color: #ff6b6b; }
+
+    /* ── Driver badge ─────────────────────────────────────── */
+    .driver-badge {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--text);
+    }
+
+    /* ── Narrative ────────────────────────────────────────── */
+    .narrative-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--red);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+    .narrative-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 10px;
+    }
+    .narrative-text {
+      font-size: 14px;
+      color: var(--text-2);
+      line-height: 1.7;
+    }
+
+    /* ── Info note ────────────────────────────────────────── */
+    .info-note {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-2);
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    /* ── Hidden ───────────────────────────────────────────── */
+    .hidden { display: none !important; }
+
+    /* ── Fade in ──────────────────────────────────────────── */
+    .fade-in {
+      animation: fadeIn .35s ease forwards;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .container { padding: 16px; }
+      .header-inner { padding: 16px; }
+      .setup-row { flex-direction: column; }
+      .btn-analyze { width: 100%; }
+      .adv-row .form-group { max-width: 100%; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .deg-grid { grid-template-columns: 1fr; }
+      .tab-btn span.tab-label { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <div class="logo-block">
+      <span class="logo-f1">F1</span>
+      <span class="logo-title">Strategy Optimizer</span>
+      <span class="logo-sub">Pre-race tire strategy analysis · Powered by FastF1</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Main ────────────────────────────────────────────────────────── -->
+<main class="container">
+
+  <!-- Setup Card -->
+  <div class="card" id="setupCard">
+    <div class="section-title">Race Configuration</div>
+    <div class="setup-row">
+      <div class="form-group" style="max-width:110px">
+        <label>Season</label>
+        <select id="yearSel"></select>
+      </div>
+      <div class="form-group">
+        <label>Grand Prix</label>
+        <select id="gpSel" disabled><option value="">Loading…</option></select>
+      </div>
+      <button class="btn-analyze" id="analyzeBtn" onclick="startAnalysis()" disabled>
+        Analyze
+      </button>
+    </div>
+
+    <div class="adv-toggle" id="advToggle" onclick="toggleAdv()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Advanced Settings
+    </div>
+    <div class="adv-panel" id="advPanel">
+      <div class="adv-row">
+        <div class="form-group">
+          <label>Max Pit Stops</label>
+          <select id="maxStopsSel">
+            <option value="1">1 stop</option>
+            <option value="2" selected>2 stops</option>
+            <option value="3">3 stops</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:260px">
+          <label>Driver Filter (optional)</label>
+          <input type="text" id="driverInput" placeholder="e.g. VER, LEC, HAM" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error banner -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- Progress Card -->
+  <div class="card hidden" id="progressCard">
+    <div class="progress-header">
+      <div class="spinner"></div>
+      <span class="progress-label">Analyzing…</span>
+    </div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsSection" class="hidden">
+
+    <!-- Summary metrics -->
+    <div class="summary-grid" id="summaryGrid">
+      <div class="metric-card">
+        <div class="metric-label">Race Distance</div>
+        <div class="metric-value" id="mLaps">—</div>
+        <div class="metric-sub">laps</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Pit Stop Loss</div>
+        <div class="metric-value" id="mPitLoss">—</div>
+        <div class="metric-sub">seconds</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Temp Δ (FP2 → Race)</div>
+        <div class="metric-value" id="mTempDelta">—</div>
+        <div class="metric-sub" id="mTempSub">°C</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Strategies Scored</div>
+        <div class="metric-value" id="mCount">—</div>
+        <div class="metric-sub" id="mRef">—</div>
+      </div>
+      <div class="metric-card accent" style="grid-column: span 2">
+        <div class="metric-label">Pre-Race Optimal</div>
+        <div class="metric-value sm" id="mOptimal">—</div>
+        <div class="metric-sub" id="mOptimalTime">—</div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="tab-bar" style="margin-top:16px">
+      <button class="tab-btn active" onclick="showTab('deg')">
+        <span class="tab-icon">📈</span> <span class="tab-label">Degradation</span>
+      </button>
+      <button class="tab-btn" onclick="showTab('strat')">
+        <span class="tab-icon">🏆</span> <span class="tab-label">Strategies</span>
+      </button>
+      <button class="tab-btn" onclick="showTab('sens')">
+        <span class="tab-icon">🎯</span> <span class="tab-label">Sensitivity</span>
+      </button>
+      <button class="tab-btn" onclick="showTab('val')">
+        <span class="tab-icon">📊</span> <span class="tab-label">Validation</span>
+      </button>
+    </div>
+
+    <!-- Degradation tab -->
+    <div class="card tab-body active" id="tab-deg" style="margin-top:8px">
+      <div class="section-title">Tire Degradation Curves</div>
+      <div class="deg-grid" id="degGrid"></div>
+    </div>
+
+    <!-- Strategies tab -->
+    <div class="card tab-body" id="tab-strat" style="margin-top:8px">
+      <div class="section-title">Strategy Rankings <span id="stratCount" style="font-family:Inter;font-weight:400;font-size:12px;text-transform:none;letter-spacing:0;color:var(--text-2);"></span></div>
+      <div class="table-wrap" id="stratTable"></div>
+    </div>
+
+    <!-- Sensitivity tab -->
+    <div class="card tab-body" id="tab-sens" style="margin-top:8px">
+      <div class="section-title">Sensitivity Analysis <span style="font-family:Inter;font-weight:400;font-size:12px;text-transform:none;letter-spacing:0;color:var(--text-2);">±15% degradation shift</span></div>
+      <div class="info-note">
+        Each strategy is re-scored with degradation curves shifted <b>+15%</b> (hotter, more wear) and <b>−15%</b> (cooler, less wear).
+        "Type Flip" indicates the optimal stop-count changes under that shift — a fragile recommendation.
+      </div>
+      <div class="table-wrap" id="sensTable"></div>
+    </div>
+
+    <!-- Validation tab -->
+    <div class="card tab-body" id="tab-val" style="margin-top:8px">
+      <div class="section-title">Model vs. Reality</div>
+      <div class="info-note">
+        Each driver's <em>actual</em> race strategy is scored through the pre-race model.
+        Errors of 100–300 s are expected — they reflect safety cars, traffic, and reactive pit calls the model cannot anticipate.
+      </div>
+      <div class="table-wrap" id="valTable"></div>
+    </div>
+
+    <!-- Narrative -->
+    <div class="narrative-card" id="narrativeCard" style="margin-top:16px">
+      <div class="narrative-title">📋 Insights</div>
+      <p class="narrative-text" id="narrativeText">—</p>
+    </div>
+
+  </div><!-- /resultsSection -->
+
+</main>
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────
+let currentJob = null;
+let pollTimer  = null;
+const charts   = {};
+
+// ── Init ────────────────────────────────────────────────────────────────
+(function init() {
+  const yearSel = document.getElementById('yearSel');
+  for (let y = 2024; y >= 2018; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.text = y;
+    if (y === 2023) o.selected = true;
+    yearSel.appendChild(o);
+  }
+  yearSel.addEventListener('change', () => loadGPs(+yearSel.value));
+  loadGPs(2023);
+})();
+
+async function loadGPs(year) {
+  const sel = document.getElementById('gpSel');
+  const btn = document.getElementById('analyzeBtn');
+  sel.disabled = true; btn.disabled = true;
+  sel.innerHTML = '<option>Loading…</option>';
+  try {
+    const res = await fetch(`/api/events/${year}`);
+    if (!res.ok) throw new Error(await res.text());
+    const events = await res.json();
+    sel.innerHTML = '';
+    events.forEach(e => {
+      const o = document.createElement('option');
+      o.value = e.name;
+      o.text  = `Rd ${e.round} · ${e.name.replace(' Grand Prix','').replace(' Grand Prix','').trim()}`;
+      sel.appendChild(o);
+    });
+    sel.disabled = false;
+    btn.disabled = false;
+  } catch (err) {
+    sel.innerHTML = '<option>Error loading events</option>';
+    showError('Could not load event schedule: ' + err.message);
+  }
+}
+
+// ── Advanced panel ───────────────────────────────────────────────────────
+function toggleAdv() {
+  const p = document.getElementById('advPanel');
+  const t = document.getElementById('advToggle');
+  p.classList.toggle('open');
+  t.classList.toggle('open');
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-body').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  const idx = {deg:0, strat:1, sens:2, val:3}[name];
+  document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+}
+
+// ── Analysis ──────────────────────────────────────────────────────────────
+async function startAnalysis() {
+  clearError();
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  Object.values(charts).forEach(c => c.destroy());
+  Object.keys(charts).forEach(k => delete charts[k]);
+
+  const year     = +document.getElementById('yearSel').value;
+  const gp       = document.getElementById('gpSel').value;
+  const maxStops = +document.getElementById('maxStopsSel').value;
+  const rawDrivers = document.getElementById('driverInput').value.trim();
+  const drivers  = rawDrivers ? rawDrivers.split(/[\s,]+/).map(d => d.toUpperCase()).filter(Boolean) : null;
+
+  if (!gp) { showError('Please select a Grand Prix.'); return; }
+
+  document.getElementById('resultsSection').classList.add('hidden');
+  document.getElementById('progressCard').classList.remove('hidden');
+  document.getElementById('progressLog').innerHTML = '';
+  document.getElementById('analyzeBtn').disabled = true;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({year, gp, max_stops: maxStops, drivers})
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const {job_id} = await res.json();
+    currentJob = job_id;
+    schedulePoll(job_id);
+  } catch (err) {
+    finishLoading(false);
+    showError('Failed to start analysis: ' + err.message);
+  }
+}
+
+function schedulePoll(jobId, delay = 1500) {
+  pollTimer = setTimeout(() => poll(jobId), delay);
+}
+
+async function poll(jobId) {
+  try {
+    const res = await fetch(`/api/status/${jobId}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    updateLog(data.log);
+
+    if (data.status === 'running') {
+      schedulePoll(jobId, 2000);
+    } else if (data.status === 'done') {
+      await loadResults(jobId);
+    } else {
+      finishLoading(false);
+      showError('Analysis failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    finishLoading(false);
+    showError('Poll error: ' + err.message);
+  }
+}
+
+let lastLogCount = 0;
+function updateLog(lines) {
+  const el = document.getElementById('progressLog');
+  if (lines.length === lastLogCount) return;
+  el.innerHTML = lines.map((l, i) =>
+    `<span class="log-line${i >= lastLogCount ? ' new' : ''}">▸ ${l}</span>`
+  ).join('\n');
+  lastLogCount = lines.length;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function loadResults(jobId) {
+  try {
+    const res = await fetch(`/api/results/${jobId}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    finishLoading(true);
+    renderResults(data);
+  } catch (err) {
+    finishLoading(false);
+    showError('Could not load results: ' + err.message);
+  }
+}
+
+function finishLoading(success) {
+  document.getElementById('progressCard').classList.add('hidden');
+  document.getElementById('analyzeBtn').disabled = false;
+  lastLogCount = 0;
+}
+
+// ── Error ─────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('visible');
+}
+function clearError() {
+  document.getElementById('errorBanner').classList.remove('visible');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function cmpColor(cmp) {
+  return {SOFT:'#e10600', MEDIUM:'#f5c518', HARD:'#b0b0b8'}[cmp] || '#888';
+}
+function cmpColorAlpha(cmp, a) {
+  const m = {SOFT:'225,6,0', MEDIUM:'245,197,24', HARD:'176,176,184'}[cmp] || '128,128,128';
+  return `rgba(${m},${a})`;
+}
+function cmpClass(cmp) {
+  return {SOFT:'soft', MEDIUM:'medium', HARD:'hard'}[cmp] || '';
+}
+function cmpShort(cmp) {
+  return {SOFT:'S', MEDIUM:'M', HARD:'H'}[cmp] || cmp[0];
+}
+
+function stintSeqHtml(desc) {
+  return desc.split(' → ').map(part => {
+    const m = part.match(/(\d+)L\s+(\w+)/);
+    if (!m) return `<span class="stint-pill">${part}</span>`;
+    const [, laps, cmp] = m;
+    return `<span class="stint-pill ${cmpClass(cmp.toUpperCase())}">${laps}L ${cmpShort(cmp.toUpperCase())}</span>`;
+  }).join('<span class="stint-arrow"> › </span>');
+}
+
+function fmtRaceTime(s) {
+  const h  = Math.floor(s / 3600);
+  const m  = Math.floor((s % 3600) / 60);
+  const sc = Math.floor(s % 60);
+  const ms = Math.round((s % 1) * 10);
+  return h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}.${ms}`
+    : `${m}:${String(sc).padStart(2,'0')}.${ms}`;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function renderResults(data) {
+  // Summary cards
+  document.getElementById('mLaps').textContent        = data.circuit.total_laps;
+  document.getElementById('mPitLoss').textContent     = data.circuit.pit_loss.toFixed(1);
+  const td = data.circuit.temp_delta;
+  document.getElementById('mTempDelta').textContent   = (td >= 0 ? '+' : '') + td.toFixed(1);
+  document.getElementById('mTempSub').textContent     = `°C warmer on race day (${data.circuit.fp2_temp}°C FP2 → ${data.circuit.race_temp}°C race)`;
+  document.getElementById('mCount').textContent       = data.total_strategies.toLocaleString();
+  document.getElementById('mRef').textContent         = `ref: ${data.reference_driver} (${data.reference_pace.toFixed(2)} s/lap)`;
+
+  const opt = data.strategies[0];
+  if (opt) {
+    document.getElementById('mOptimal').textContent      = opt.description;
+    document.getElementById('mOptimalTime').textContent  = `${fmtRaceTime(opt.total_time)} predicted · ${opt.stops}-stop`;
+  }
+
+  renderDegTab(data.degradation || {});
+  renderStratTab(data.strategies || [], data.total_strategies || 0);
+  renderSensTab(data.sensitivity || []);
+  renderValTab(data.validation || []);
+  document.getElementById('narrativeText').textContent = data.narrative || 'No insights available.';
+
+  // Ensure first tab is active
+  showTab('deg');
+  
+  document.getElementById('resultsSection').classList.remove('hidden');
+  document.getElementById('resultsSection').classList.add('fade-in');
+  document.getElementById('resultsSection').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── Degradation charts ────────────────────────────────────────────────────
+function renderDegTab(degData) {
+  const grid = document.getElementById('degGrid');
+  grid.innerHTML = '';
+  const COMPOUNDS_ORDER = ['SOFT','MEDIUM','HARD'];
+
+  COMPOUNDS_ORDER.forEach(cmp => {
+    if (!degData[cmp]) return;
+    const d     = degData[cmp];
+    const color = cmpColor(cmp);
+    const id    = `chart-${cmp}`;
+
+    const card = document.createElement('div');
+    card.className = 'deg-card';
+    card.innerHTML = `
+      <div class="deg-card-header">
+        <span class="compound-badge ${cmpClass(cmp)}">${cmp}</span>
+        <div class="deg-stats">
+          <span>R² <b>${d.r_squared.toFixed(3)}</b></span>
+          <span>n=<b>${d.sample_size}</b></span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="${id}"></canvas></div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="legend-line" style="background:${color}"></div> Degradation</div>
+        <div class="chart-legend-item"><div class="legend-line" style="background:${color};opacity:.4;border-top:1px dashed ${color}"></div> ±15%</div>
+        <div class="chart-legend-item"><div class="legend-dot" style="background:${cmpColorAlpha(cmp,0.5)}"></div> Practice laps</div>
+      </div>`;
+    grid.appendChild(card);
+
+    const ctx = document.getElementById(id).getContext('2d');
+    const labels = d.curve_x;
+
+    charts[cmp] = new Chart(ctx, {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: 'line',
+            label: '+15%',
+            data: d.curve_y_plus,
+            borderColor: cmpColorAlpha(cmp, 0.35),
+            borderWidth: 1,
+            borderDash: [4, 3],
+            fill: false,
+            pointRadius: 0,
+            tension: 0.3,
+            order: 3,
+          },
+          {
+            type: 'line',
+            label: cmp + ' Degradation',
+            data: d.curve_y,
+            borderColor: color,
+            borderWidth: 2.5,
+            fill: false,
+            pointRadius: 0,
+            tension: 0.3,
+            order: 2,
+          },
+          {
+            type: 'line',
+            label: '−15%',
+            data: d.curve_y_minus,
+            borderColor: cmpColorAlpha(cmp, 0.35),
+            borderWidth: 1,
+            borderDash: [4, 3],
+            fill: false,
+            pointRadius: 0,
+            tension: 0.3,
+            order: 3,
+          },
+          {
+            type: 'scatter',
+            label: 'Practice laps',
+            data: d.raw_x.map((x, i) => ({ x, y: d.raw_y[i] })),
+            backgroundColor: cmpColorAlpha(cmp, 0.35),
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            order: 1,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#18181f',
+            titleColor: '#eaeaf0',
+            bodyColor: '#9999aa',
+            borderColor: '#2c2c38',
+            borderWidth: 1,
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(3) ?? ''} s`
+            }
+          },
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Tire Age (laps)', color: '#55556a', font: {size:11} },
+            grid:  { color: '#1e1e28' },
+            ticks: { color: '#55556a', font: {size:11} },
+          },
+          y: {
+            title: { display: true, text: 'Time Delta (s)', color: '#55556a', font: {size:11} },
+            grid:  { color: '#1e1e28' },
+            ticks: { color: '#55556a', font: {size:11} },
+          },
+        },
+      }
+    });
+  });
+}
+
+// ── Strategy table ────────────────────────────────────────────────────────
+function renderStratTab(strategies, totalCount) {
+  if (!strategies || strategies.length === 0) {
+    document.getElementById('stratTable').innerHTML =
+      '<p style="color:var(--text-2);padding:16px">No strategy data available.</p>';
+    return;
+  }
+  document.getElementById('stratCount').textContent = `(showing top ${Math.min(20, strategies.length)} of ${totalCount.toLocaleString()})`;
+  const maxDelta = Math.max(...strategies.map(s => s.delta), 1);
+  let html = `<table>
+    <thead><tr>
+      <th>#</th><th>Stops</th><th>Strategy</th><th>Pred. Time</th><th class="delta-cell">Δ to Optimal</th>
+    </tr></thead><tbody>`;
+
+  strategies.forEach((s, i) => {
+    const isOpt = i === 0;
+    const barPct = (s.delta / maxDelta * 100).toFixed(1);
+    const deltaCell = isOpt
+      ? `<span class="optimal-badge">OPTIMAL</span>`
+      : `<div class="delta-bar-wrap">
+           <div class="delta-bar-bg"><div class="delta-bar-fill" style="width:${barPct}%"></div></div>
+           <span class="delta-text">+${s.delta.toFixed(1)} s</span>
+         </div>`;
+    html += `<tr class="${isOpt ? 'row-optimal' : ''}">
+      <td><span class="rank-num ${isOpt ? 'top1' : ''}">${s.rank}</span></td>
+      <td style="color:var(--text-2)">${s.stops}</td>
+      <td><div class="stint-seq">${stintSeqHtml(s.description)}</div></td>
+      <td style="font-variant-numeric:tabular-nums;color:var(--text)">${fmtRaceTime(s.total_time)}</td>
+      <td class="delta-cell">${deltaCell}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('stratTable').innerHTML = html;
+}
+
+// ── Sensitivity table ─────────────────────────────────────────────────────
+function renderSensTab(sensitivity) {
+  if (!sensitivity || sensitivity.length === 0) {
+    document.getElementById('sensTable').innerHTML =
+      '<p style="color:var(--text-2);padding:16px">No sensitivity analysis data available.</p>';
+    return;
+  }
+  let html = `<table>
+    <thead><tr>
+      <th>Strategy</th><th>Nominal</th><th>−15% Deg</th><th>+15% Deg</th><th>Type Flip?</th>
+    </tr></thead><tbody>`;
+
+  sensitivity.forEach((r, i) => {
+    const flipCls  = r.flips ? 'badge-yes' : 'badge-no';
+    const flipText = r.flips ? '⚠ YES' : '✓ Stable';
+    html += `<tr class="${i===0?'row-optimal':''}">
+      <td><div class="stint-seq">${stintSeqHtml(r.description)}</div></td>
+      <td style="font-variant-numeric:tabular-nums">${fmtRaceTime(r.nominal)}</td>
+      <td style="font-variant-numeric:tabular-nums;color:var(--green)">${fmtRaceTime(r.time_minus)}</td>
+      <td style="font-variant-numeric:tabular-nums;color:#ff8888">${fmtRaceTime(r.time_plus)}</td>
+      <td><span class="${flipCls}">${flipText}</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('sensTable').innerHTML = html;
+}
+
+// ── Validation table ──────────────────────────────────────────────────────
+function renderValTab(validations) {
+  if (!validations.length) {
+    document.getElementById('valTable').innerHTML =
+      '<p style="color:var(--text-2);padding:16px">No validation data — no drivers completed the full race distance.</p>';
+    return;
+  }
+
+  let html = `<table>
+    <thead><tr>
+      <th>Driver</th><th>Actual Strategy</th><th>Pred. Rank</th>
+      <th>Actual Time</th><th>Pred. Time</th>
+      <th>Model Error</th><th>Δ Optimal</th><th>Traffic Loss/Lap</th>
+    </tr></thead><tbody>`;
+
+  validations.forEach(v => {
+    const absErr = Math.abs(v.error);
+    const errCls = absErr < 100 ? 'error-ok' : absErr < 300 ? 'error-warn' : 'error-high';
+    const errSign = v.error >= 0 ? '+' : '';
+    const dOpt   = v.delta_to_optimal >= 0 ? '+' : '';
+    html += `<tr>
+      <td><span class="driver-badge">${v.driver}</span></td>
+      <td><div class="stint-seq">${stintSeqHtml(v.actual_strategy)}</div></td>
+      <td style="color:var(--text-2)">${v.rank.toLocaleString()}</td>
+      <td style="font-variant-numeric:tabular-nums">${fmtRaceTime(v.actual_time)}</td>
+      <td style="font-variant-numeric:tabular-nums">${fmtRaceTime(v.predicted_time)}</td>
+      <td class="${errCls}" style="font-variant-numeric:tabular-nums">${errSign}${v.error.toFixed(1)} s</td>
+      <td style="font-variant-numeric:tabular-nums;color:var(--text-2)">${dOpt}${v.delta_to_optimal.toFixed(1)} s</td>
+      <td style="font-variant-numeric:tabular-nums;color:var(--text-2)">${v.traffic_loss >= 0 ? '+' : ''}${v.traffic_loss.toFixed(2)} s</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('valTable').innerHTML = html;
+}
+</script>
+</body>
+</html>
