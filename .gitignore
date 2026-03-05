@@ -88,3 +88,7 @@ models/
 *.tmp
 *.temp
 .cache/
+
+# FastF1 cache
+f1_strategy/cache/
+*.ff1pkl
