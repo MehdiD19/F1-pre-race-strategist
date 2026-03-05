@@ -1149,7 +1149,7 @@ function renderValTab(validations) {
 
   let html = `<table>
     <thead><tr>
-      <th>Driver</th><th>Actual Strategy</th><th>Pred. Rank</th>
+      <th>Driver</th><th>Base Pace</th><th>Actual Strategy</th><th>Pred. Rank</th>
       <th>Actual Time</th><th>Pred. Time</th>
       <th>Model Error</th><th>Δ Optimal</th><th>Traffic Loss/Lap</th>
     </tr></thead><tbody>`;
@@ -1161,6 +1161,7 @@ function renderValTab(validations) {
     const dOpt   = v.delta_to_optimal >= 0 ? '+' : '';
     html += `<tr>
       <td><span class="driver-badge">${v.driver}</span></td>
+      <td style="font-variant-numeric:tabular-nums;color:var(--text-2)">${v.base_pace ? v.base_pace.toFixed(3) + ' s' : '—'}</td>
       <td><div class="stint-seq">${stintSeqHtml(v.actual_strategy)}</div></td>
       <td style="color:var(--text-2)">${v.rank.toLocaleString()}</td>
       <td style="font-variant-numeric:tabular-nums">${fmtRaceTime(v.actual_time)}</td>

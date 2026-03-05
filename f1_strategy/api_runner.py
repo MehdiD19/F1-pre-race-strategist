@@ -188,6 +188,15 @@ def run_analysis(
         },
         "reference_driver": reference_driver,
         "reference_pace": round(reference_pace, 3),
+        # Per-driver qualifying-derived base paces (quali best + circuit fuel penalty).
+        # Every driver gets their own pace; the reference driver is simply the fastest.
+        # Strategy RANKINGS are invariant to base_pace (it's an additive constant),
+        # so the optimal strategy order is the same for all drivers.
+        # What differs per driver is their absolute predicted time with any strategy.
+        "driver_paces": {
+            driver: round(pace, 3)
+            for driver, pace in sorted(base_paces.items(), key=lambda x: x[1])
+        },
         "total_strategies": len(ranked),
         "degradation": _serialize_degradation(deg_curves),
         "strategies": [
@@ -214,9 +223,11 @@ def run_analysis(
         "validation": [
             {
                 "driver": v.driver,
+                "base_pace": round(base_paces.get(v.driver, 0.0), 3),
                 "actual_strategy": v.actual_strategy.description,
                 "actual_time": round(v.actual_race_time, 1),
                 "predicted_time": round(v.predicted_race_time, 1),
+                "optimal_time": round(v.optimal_time, 1),
                 "error": round(v.model_error, 1),
                 "rank": v.predicted_rank,
                 "delta_to_optimal": round(v.delta_to_optimal, 1),

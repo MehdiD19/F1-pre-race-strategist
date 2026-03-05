@@ -157,16 +157,17 @@ def validate_race(
             actual_strat, deg_curves, base_pace, profile.pit_loss_seconds, profile.total_laps
         )
 
-        # Rank: find where the actual strategy's predicted time falls
-        predicted_rank = 1
-        for strat in ranked_strategies:
-            strat_time = score_strategy(
+        # Rank: count every strategy that scores strictly better than the driver's
+        # actual strategy (both scored with the driver's own base pace so the
+        # comparison is fair). No early break — the list is sorted by reference-
+        # driver pace, but the driver's own pace shifts absolute times while
+        # preserving relative order only approximately, so we iterate all.
+        predicted_rank = 1 + sum(
+            1 for strat in ranked_strategies
+            if score_strategy(
                 strat, deg_curves, base_pace, profile.pit_loss_seconds, profile.total_laps
-            )
-            if strat_time < predicted_time:
-                predicted_rank += 1
-            else:
-                break
+            ) < predicted_time
+        )
 
         actual_time = _actual_race_time(race, driver)
         traffic_loss = _estimate_traffic_loss(race, driver)

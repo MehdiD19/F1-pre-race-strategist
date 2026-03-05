@@ -77,7 +77,14 @@ def get_fuel_penalty(gp_name: str) -> float:
 # Warmup & pit constants
 # ---------------------------------------------------------------------------
 
-WARMUP_PENALTY = 1.2   # seconds lost on the first lap of a new stint (cold tyres)
+# Compound-dependent warmup penalty profile (seconds lost per lap after a pit stop).
+# Applied to the first N laps of each non-opening stint.
+# Softer compounds heat their rubber quickly; Hards bleed warmup across 3 laps.
+WARMUP_PROFILE: dict[str, list[float]] = {
+    "SOFT":   [1.0],              # ~1.0 s total over 1 lap
+    "MEDIUM": [1.5, 0.5],         # ~2.0 s total over 2 laps
+    "HARD":   [2.0, 1.0, 0.5],    # ~3.5 s total over 3 laps
+}
 
 # ---------------------------------------------------------------------------
 # Temperature correction

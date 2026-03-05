@@ -42,34 +42,72 @@ def _load_session(year: int, gp: str, identifier: str) -> fastf1.core.Session:
 
 
 def _estimate_pit_loss(race_session: fastf1.core.Session) -> float:
-    """Estimate pit-lane time loss by comparing box laps to clean laps."""
-    laps = race_session.laps
+    """Estimate pit-lane time loss by averaging per-stop deltas across all drivers.
 
-    clean_laps = laps.pick_wo_box().pick_accurate()
-    if clean_laps.empty:
+    For each driver and each pit stop, computes:
+        stop_loss = (in_lap_time + out_lap_time) − 2 × driver_median_clean_lap
+
+    This captures the real time penalty paid per stop rather than a single
+    global median, and naturally accounts for pit-lane length differences.
+    """
+    laps = race_session.laps
+    clean = laps.pick_wo_box().pick_accurate()
+
+    if clean.empty:
         logger.warning("No clean laps found for pit-loss estimation, using default 22 s")
         return 22.0
 
-    median_clean = clean_laps["LapTime"].dt.total_seconds().median()
+    pit_losses: list[float] = []
 
-    in_laps = laps.pick_box_laps(which="in")
-    out_laps = laps.pick_box_laps(which="out")
-    box_laps = pd.concat([in_laps, out_laps]).drop_duplicates()
+    for driver in laps["Driver"].unique():
+        d_all   = laps.pick_drivers(driver).sort_values("LapNumber")
+        d_clean = clean.pick_drivers(driver)
 
-    if box_laps.empty:
-        logger.warning("No box laps found, using default 22 s")
+        if d_clean.empty or len(d_clean) < 3:
+            continue
+
+        driver_median = float(d_clean["LapTime"].dt.total_seconds().median())
+        stints = sorted(d_all["Stint"].unique())
+
+        for i in range(1, len(stints)):
+            prev_stint = d_all[d_all["Stint"] == stints[i - 1]]
+            curr_stint = d_all[d_all["Stint"] == stints[i]]
+
+            if prev_stint.empty or curr_stint.empty:
+                continue
+
+            in_lap_t  = prev_stint.iloc[-1]["LapTime"]
+            out_lap_t = curr_stint.iloc[0]["LapTime"]
+
+            if pd.isna(in_lap_t) or pd.isna(out_lap_t):
+                continue
+
+            in_s  = float(in_lap_t.total_seconds())
+            out_s = float(out_lap_t.total_seconds())
+
+            if in_s <= 0 or out_s <= 0 or in_s > 300 or out_s > 300:
+                continue
+
+            stop_loss = (in_s + out_s) - 2.0 * driver_median
+            if 5.0 < stop_loss < 60.0:
+                pit_losses.append(stop_loss)
+
+    if not pit_losses:
+        logger.warning("No valid per-stop pit losses found, using default 22 s")
         return 22.0
 
-    median_box = box_laps["LapTime"].dt.total_seconds().median()
-    pit_loss = median_box - median_clean
+    mean_loss = float(np.mean(pit_losses))
+    logger.info(
+        "Pit-loss: mean=%.1f s  std=%.1f s  n=%d stops  range=[%.1f, %.1f] s",
+        mean_loss, float(np.std(pit_losses)),
+        len(pit_losses), min(pit_losses), max(pit_losses),
+    )
 
-    if pit_loss < 10 or pit_loss > 40:
-        logger.warning(
-            "Pit-loss estimate %.1f s looks suspect, clamping to [15, 30]", pit_loss
-        )
-        pit_loss = np.clip(pit_loss, 15.0, 30.0)
+    if not (10.0 <= mean_loss <= 40.0):
+        logger.warning("Pit-loss estimate %.1f s looks suspect, clamping to [15, 30]", mean_loss)
+        mean_loss = float(np.clip(mean_loss, 15.0, 30.0))
 
-    return float(pit_loss)
+    return mean_loss
 
 
 def _mean_track_temp(session: fastf1.core.Session, first_half_only: bool = False) -> float:

@@ -24,7 +24,7 @@ from config import (
     MIN_STINT_LAPS,
     SENSITIVITY_RANGE,
     STINT_DISCRETIZATION,
-    WARMUP_PENALTY,
+    WARMUP_PROFILE,
 )
 
 # FULL_FUEL_PENALTY is kept as import for callers that don't pass fuel_penalty
@@ -156,9 +156,12 @@ def score_strategy(
 
             lap_time = base_pace + deg_penalty - fuel_benefit
 
-            # Warm-up penalty on the first lap of every stint after the first
-            if lap_in_stint == 0 and stint_idx > 0:
-                lap_time += WARMUP_PENALTY
+            # Compound-specific warmup: apply profile over first N laps of non-opening stints.
+            # Softs heat in 1 lap; Mediums 2 laps; Hards 3 laps.
+            if stint_idx > 0:
+                warmup = WARMUP_PROFILE.get(stint.compound, [1.2])
+                if lap_in_stint < len(warmup):
+                    lap_time += warmup[lap_in_stint]
 
             total_time += lap_time
 
