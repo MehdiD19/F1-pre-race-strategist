@@ -122,6 +122,28 @@ COMPOUND_FALLBACK_DEG: dict[str, list[float]] = {
 }
 
 # ---------------------------------------------------------------------------
+# Historical prior settings (Phase 2)
+# ---------------------------------------------------------------------------
+
+# Number of prior seasons to load for the historical degradation prior.
+HISTORICAL_NUM_YEARS = 3
+
+# Earliest season to include in the prior.  2022 marks the ground-effect
+# regulation change; pre-2022 downforce levels produce different tyre loading
+# so those seasons are excluded by default.
+HISTORICAL_MIN_YEAR = 2022
+
+# Minimum laps (after stripping pit-in/out) for a race stint to qualify for
+# the historical prior.  Race stints are longer and cleaner than practice runs.
+HISTORICAL_MIN_RACE_STINT_LAPS = 10
+
+# Denominator for the practice data-confidence weight in blending.
+# practice_weight = min(n / BLEND_N_SATURATION, 1.0) * min(r2 / BLEND_R2_SATURATION, 1.0)
+# At n = BLEND_N_SATURATION and R² = BLEND_R2_SATURATION, practice data is trusted fully.
+BLEND_N_SATURATION  = 40.0   # sample size at which practice gets full weight
+BLEND_R2_SATURATION = 0.40   # R² at which practice gets full weight
+
+# ---------------------------------------------------------------------------
 # Stint generation & strategy constraints
 # ---------------------------------------------------------------------------
 

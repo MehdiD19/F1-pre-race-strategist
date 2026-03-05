@@ -15,9 +15,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from config import COMPOUNDS, SENSITIVITY_RANGE, get_fuel_penalty
+from config import COMPOUNDS, HISTORICAL_MIN_YEAR, HISTORICAL_NUM_YEARS, SENSITIVITY_RANGE, get_fuel_penalty
 from data_collection import build_circuit_profile
 from degradation_model import DegradationCurve, build_degradation_curves
+from historical_model import build_historical_prior
 from strategy_engine import (
     compute_base_pace,
     generate_strategies,
@@ -48,13 +49,15 @@ def _serialize_degradation(curves: Dict[str, DegradationCurve]) -> Dict[str, Any
             raw_y = [round(float(v), 4) for v in curve.raw_data["delta_seconds"].tolist()]
 
         out[compound] = {
-            "r_squared": round(float(curve.r_squared), 3),
-            "sample_size": int(curve.sample_size),
-            "is_fallback": bool(curve.is_fallback),
-            "curve_x": curve_x,
-            "curve_y": [round(v, 4) for v in curve_y],
+            "r_squared":    round(float(curve.r_squared), 3),
+            "sample_size":  int(curve.sample_size),
+            "is_fallback":  bool(curve.is_fallback),
+            "source":       curve.source,
+            "prior_weight": round(float(curve.prior_weight), 3),
+            "curve_x":      curve_x,
+            "curve_y":      [round(v, 4) for v in curve_y],
             "curve_y_plus": [round(v, 4) for v in curve_y_plus],
-            "curve_y_minus": [round(v, 4) for v in curve_y_minus],
+            "curve_y_minus":[round(v, 4) for v in curve_y_minus],
             "raw_x": raw_x,
             "raw_y": raw_y,
         }
@@ -83,19 +86,50 @@ def run_analysis(
         f"· race temp {profile.race_track_temp:.1f} °C (FP2 {profile.fp2_track_temp:.1f} °C)"
     )
 
-    # ── Phase 2 ────────────────────────────────────────────────────────────
-    log("Phase 2 — Extracting long runs and fitting degradation curves…")
+    # ── Phase 2a — Practice long-run extraction ────────────────────────────
+    log("Phase 2 — Extracting practice long runs and building historical prior…")
     available = [
         c for c in COMPOUNDS
         if c in set(profile.fp2_session.laps["Compound"].unique())
         | set(profile.fp3_session.laps["Compound"].unique())
     ] or list(COMPOUNDS)
 
-    deg_curves = build_degradation_curves(profile, compounds=available)
+    # ── Phase 2b — Historical race prior ──────────────────────────────────
+    historical_prior = {}
+    try:
+        historical_prior = build_historical_prior(
+            gp=gp,
+            year=year,
+            compounds=available,
+            num_years=HISTORICAL_NUM_YEARS,
+            min_year=HISTORICAL_MIN_YEAR,
+            progress=progress,
+        )
+        if historical_prior:
+            log(
+                f"  Historical prior loaded for: "
+                f"{[c for c in historical_prior]} "
+                f"(years back to {HISTORICAL_MIN_YEAR})"
+            )
+        else:
+            log("  Historical prior: no data available — using practice only")
+    except Exception as exc:
+        log(f"  Historical prior failed ({exc}) — continuing with practice data only")
+        historical_prior = {}
+
+    # ── Phase 2c — Blend practice + prior ─────────────────────────────────
+    deg_curves = build_degradation_curves(
+        profile,
+        compounds=available,
+        historical_prior=historical_prior or None,
+    )
     if not deg_curves:
         raise RuntimeError("Could not build any degradation curves for this race.")
     for c, curve in deg_curves.items():
-        log(f"  {c}: R²={curve.r_squared:.3f}  n={curve.sample_size}")
+        log(
+            f"  {c}: source={curve.source}  R²={curve.r_squared:.3f}  "
+            f"n={curve.sample_size}  prior_weight={curve.prior_weight:.2f}"
+        )
 
     # ── Phase 3 ────────────────────────────────────────────────────────────
     log(f"Phase 3 — Generating all valid strategies (max {max_stops} stops)…")
