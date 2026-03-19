@@ -1009,7 +1009,6 @@ function renderDegTab(degData) {
       <div class="deg-card-header">
         <span class="compound-badge ${cmpClass(cmp)}">${cmp}</span>
         <div class="deg-stats">
-          <span>R² <b>${d.r_squared.toFixed(3)}</b></span>
           <span>n=<b>${d.sample_size}</b></span>
         </div>
       </div>
@@ -1306,7 +1305,7 @@ function renderValTab(validations) {
 
   let html = `<table>
     <thead><tr>
-      <th>Driver</th><th>Base Pace</th><th>Actual Strategy</th><th>Pred. Rank</th>
+      <th>Driver</th><th>Base Pace</th><th>Actual Strategy</th>
       <th>Actual Time</th><th>Pred. Time</th>
       <th>Model Error</th><th>Δ Optimal</th><th>Traffic Loss/Lap</th>
     </tr></thead><tbody>`;
@@ -1320,7 +1319,6 @@ function renderValTab(validations) {
       <td><span class="driver-badge">${v.driver}</span></td>
       <td style="font-variant-numeric:tabular-nums;color:var(--text-2)">${v.base_pace ? v.base_pace.toFixed(3) + ' s' : '—'}</td>
       <td><div class="stint-seq">${stintSeqHtml(v.actual_strategy)}</div></td>
-      <td style="color:var(--text-2)">${v.rank.toLocaleString()}</td>
       <td style="font-variant-numeric:tabular-nums">${fmtRaceTime(v.actual_time)}</td>
       <td style="font-variant-numeric:tabular-nums">${fmtRaceTime(v.predicted_time)}</td>
       <td class="${errCls}" style="font-variant-numeric:tabular-nums">${errSign}${v.error.toFixed(1)} s</td>
